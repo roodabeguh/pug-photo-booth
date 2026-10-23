@@ -48,7 +48,9 @@
     gap: 2vw; padding: 3vh 3vw;
   }
   @media (orientation: portrait) {
-    .booth { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; gap: 2vh; }
+    .booth { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 2vh; }
+    .qr-card { width: min(62vw, 30vh, 320px); }
+    .empty-print { height: auto; width: 46%; }
   }
   .half { display: grid; place-items: center; width: 100%; height: 100%; min-width: 0; min-height: 0; }
 
@@ -68,8 +70,13 @@
   .empty-print div { background: var(--ink); opacity: .12; }
 
   /* Right: the QR, or the one button */
-  .qr-card { background: #fff; padding: 3%; border-radius: 24px; box-shadow: 0 12px 30px -10px rgba(44,20,48,.35); }
-  .qr-card img, .qr-card canvas { display: block; width: 100% !important; height: auto !important; }
+  .qr-card {
+    background: #fff; padding: 14px; border-radius: 24px;
+    box-shadow: 0 12px 30px -10px rgba(44,20,48,.35);
+    width: min(72vw, 38vh, 380px); aspect-ratio: 1;
+  }
+  .qr-card img, .qr-card canvas { display: block; width: 100% !important; height: 100% !important; }
+  .qr-card img { image-rendering: pixelated; }
   .right-inner { display: grid; justify-items: center; gap: 2.5vh; width: 100%; max-width: 46vh; }
   .scan-label { font-family: var(--display); font-size: clamp(26px, 3.6vw, 46px); margin: 0; text-align: center; line-height: 1.1; }
   .scan-hint { color: var(--muted); font-size: clamp(15px, 1.5vw, 20px); margin: 0; text-align: center; }
@@ -102,7 +109,8 @@
   }
   .logo img { height: 56px; width: auto; display: block; }
   .logo span { font-family: var(--display); font-size: 19px; }
-  @media (max-width: 760px) { .logo span { display: none; } }
+  .event-label { font-family: var(--display); font-size: clamp(26px, 3.4vw, 44px); line-height: 1.1; margin: 0 0 6px; text-align: center; }
+  .event-sub { color: var(--muted); font-size: clamp(15px, 1.6vw, 20px); margin: 0 0 22px; text-align: center; }
 
   dialog {
     border: 0; border-radius: 28px; padding: 30px; width: min(560px, 92vw);
@@ -142,7 +150,9 @@
   <!-- Right half: button, then spinner, then QR -->
   <div class="half">
     <div class="right-inner">
-      <div id="rightStart">
+      <div id="rightStart" style="display:grid;justify-items:center;text-align:center">
+        <p class="event-label" id="eventLabel"></p>
+        <p class="event-sub" id="eventSub"></p>
         <button class="btn" id="loadBtn">Load the photo</button>
       </div>
 
@@ -166,6 +176,7 @@
 </div>
 
 <input type="file" id="fileInput" accept="image/*" hidden>
+<input type="file" id="bulkInput" accept="image/*" multiple hidden>
 
 <dialog id="settings">
   <h2>Booth settings</h2>
@@ -184,6 +195,7 @@
   <label class="check"><input type="checkbox" id="setFrame"> Add the Instax-style frame</label>
 
   <p class="small-note" style="margin-top:20px">Gallery link for the host:<br><span class="gallery-link" id="galleryLink"></span></p>
+  <p class="small-note" style="margin-top:14px">Setup link for a new device (opens it already signed in):<br><span class="gallery-link" id="setupLink"></span></p>
 
   <div class="row">
     <button class="btn small" id="saveSettings">Save</button>
@@ -191,6 +203,14 @@
     <button class="btn small quiet" id="newEvent">Start a new event</button>
   </div>
   <p class="small-note">&ldquo;Start a new event&rdquo; begins a fresh gallery. Do this at the start of each event.</p>
+
+  <hr style="border:0;border-top:2px solid var(--line);margin:26px 0 0">
+  <label style="margin-top:22px">Catch up the gallery</label>
+  <p class="small-note">Pick every photo from the event at once and they all go to the gallery. Guests don&rsquo;t get a QR code for these, so use it at the end of the night for anything missed.</p>
+  <div class="row" style="margin-top:14px">
+    <button class="btn small" id="bulkBtn">Add photos to the gallery</button>
+  </div>
+  <p class="small-note" id="bulkStatus" hidden></p>
 </dialog>
 
 <script>
@@ -202,6 +222,14 @@
   let settings = { ...DEFAULTS };
   try { Object.assign(settings, JSON.parse(localStorage.getItem("booth-settings") || "{}")); } catch {}
   if (settings.caption && !settings.line1) settings.line1 = settings.caption;   // older saved setting
+
+  // A one-time setup link (#k=yourkey) fills the booth key in, so it never has
+  // to be typed on a new iPad or after switching to a new web address.
+  if (location.hash.startsWith("#k=")) {
+    const fromLink = decodeURIComponent(location.hash.slice(3)).trim();
+    if (fromLink) { settings.key = fromLink; try { localStorage.setItem("booth-settings", JSON.stringify(settings)); } catch {} }
+    history.replaceState(null, "", location.pathname + location.search);
+  }
 
   let busy = false, resetTimer = null;
 
@@ -227,8 +255,14 @@
     if (which === "rightQr") resetTimer = setTimeout(reset, AUTO_RESET_MS);
   }
 
+  function paintLabel() {
+    $("#eventLabel").textContent = settings.line1 || "Secret Pug Petting Zoo";
+    $("#eventSub").textContent = settings.line2 || "";
+  }
+
   function reset() {
     clearTimeout(resetTimer);
+    paintLabel();
     $("#qr").innerHTML = "";
     $("#printImg").hidden = true;
     $("#printImg").removeAttribute("src");
@@ -252,6 +286,7 @@
     $("#setDate").checked = settings.showDate;
     $("#setFrame").checked = settings.frame;
     $("#galleryLink").textContent = settings.key ? galleryUrl() : "Enter the booth key first.";
+    $("#setupLink").textContent = settings.key ? `${location.origin}/#k=${encodeURIComponent(settings.key)}` : "Enter the booth key first.";
     $("#settings").showModal();
   }
 
@@ -262,12 +297,43 @@
     settings.showDate = $("#setDate").checked;
     settings.frame = $("#setFrame").checked;
     save();
+    paintLabel();
     $("#settings").close();
   });
   $("#closeSettings").addEventListener("click", () => $("#settings").close());
   $("#newEvent").addEventListener("click", () => {
     eventName(true);
     $("#galleryLink").textContent = galleryUrl();
+  });
+
+  // ---------- Catch-up: many photos at once, straight to the gallery ----------
+  $("#bulkBtn").addEventListener("click", () => {
+    if (!settings.key) return;
+    $("#bulkInput").click();
+  });
+
+  $("#bulkInput").addEventListener("change", async (e) => {
+    const files = [...(e.target.files || [])];
+    if (!files.length) return;
+    const btn = $("#bulkBtn"), status = $("#bulkStatus");
+    btn.disabled = true;
+    status.hidden = false;
+    let done = 0, failed = 0;
+    for (const file of files) {
+      status.textContent = `Adding ${done + failed + 1} of ${files.length}\u2026`;
+      try {
+        const dataUrl = await makePrint(file);
+        await upload(dataUrl.split(",")[1]);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+    status.textContent = failed
+      ? `Added ${done}. ${failed} didn't go through \u2014 try those again.`
+      : `Added all ${done} to the gallery.`;
+    btn.disabled = false;
+    $("#bulkInput").value = "";
   });
 
   // ---------- One tap: pick a photo, everything else is automatic ----------
@@ -358,7 +424,7 @@
     return canvas.toDataURL("image/jpeg", 0.88);
   }
 
-  async function post(image) {
+  async function upload(image) {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 30000);
     try {
@@ -370,18 +436,23 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `Server answered ${res.status}.`);
+      return data;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
+  async function post(image) {
+    try {
+      const data = await upload(image);
       $("#qr").innerHTML = "";
-      const size = Math.round(Math.min(window.innerHeight * 0.34, window.innerWidth * 0.3, 420));
       new QRCode($("#qr"), {
-        text: data.viewUrl, width: size, height: size,
+        text: data.viewUrl, width: 512, height: 512,
         colorDark: "#2c1430", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M,
       });
       showRight("rightQr");
     } catch (err) {
       fail(err.name === "AbortError" ? "The upload took too long. Check the Wi-Fi." : (err.message || "Check the Wi-Fi and try again."));
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
