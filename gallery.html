@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your photo — Secret Pug Petting Zoo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=Shrikhand&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f2dcb6; --surface: #fbf0de; --ink: #2c1430; --muted: #6e5266;
+    --accent: #d9396f; --accent-ink: #fff6ea; --line: #d8bc90; --film: #fbfaf6;
+    --display: "Shrikhand", "Cooper Black", Georgia, serif;
+    --body: "Figtree", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #22111f; --surface: #2f1a2c; --ink: #f6e6cf; --muted: #c9a9bd;
+      --accent: #ff6f9f; --accent-ink: #22111f; --line: #4a2d45;
+      color-scheme: dark;
+    }
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); }
+  [hidden] { display: none !important; }
+  a, button { color: inherit; }
+  button { font: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+  header { padding: 28px 20px 8px; text-align: center; }
+  .brand { font-family: var(--display); font-size: 22px; margin: 0; }
+  h1 { font-family: var(--display); font-weight: 400; font-size: clamp(34px, 9vw, 56px); line-height: 1.05; margin: 10px 0 6px; text-transform: capitalize; }
+  .sub { color: var(--muted); margin: 0; font-size: 17px; }
+
+  /* Single photo (from the QR code) */
+  .solo { display: grid; justify-items: center; padding: 20px 20px 8px; }
+  .solo img {
+    width: min(360px, 82vw); height: auto; display: block; background: var(--film);
+    transform: rotate(-2deg);
+    box-shadow: 0 2px 0 rgba(44,20,48,.08), 0 24px 50px -12px rgba(44,20,48,.45);
+    -webkit-touch-callout: default;
+  }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 58px; padding: 0 32px; margin-top: 32px; border-radius: 999px; border: 0;
+    background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 19px;
+    text-decoration: none;
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--accent) 55%, var(--ink));
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 55%, var(--ink)); }
+  .tip { color: var(--muted); font-size: 15px; margin: 14px 0 0; text-align: center; }
+
+  /* Gallery grid */
+  .section-title { font-weight: 800; font-size: 18px; margin: 40px 20px 14px; max-width: 1100px; }
+  @media (min-width: 1140px) { .section-title { margin-inline: auto; } }
+  .grid {
+    display: grid; gap: 18px; padding: 0 20px 48px; max-width: 1100px; margin: 0 auto;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .grid button { border: 0; padding: 0; background: none; }
+  .grid img {
+    width: 100%; aspect-ratio: 54 / 86; object-fit: cover; display: block; background: var(--film);
+    box-shadow: 0 10px 22px -10px rgba(44,20,48,.45);
+  }
+  .grid button:nth-child(3n+1) img { transform: rotate(-1.5deg); }
+  .grid button:nth-child(3n+2) img { transform: rotate(1deg); }
+  .grid button:nth-child(3n) img { transform: rotate(-.5deg); }
+
+  .notice { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 18px; }
+
+  dialog {
+    border: 0; padding: 20px; background: var(--surface); color: var(--ink);
+    border-radius: 24px; width: min(440px, 92vw); text-align: center;
+  }
+  dialog::backdrop { background: rgba(20, 8, 20, .7); }
+  dialog img { width: 100%; height: auto; display: block; -webkit-touch-callout: default; }
+  .dialog-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .dialog-actions .btn { margin-top: 18px; }
+  .btn.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line); }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="brand">Secret Pug Petting Zoo</p>
+  <h1 id="title">Photo gallery</h1>
+  <p class="sub" id="sub"></p>
+</header>
+
+<section class="solo" id="solo" hidden>
+  <img id="soloImg" alt="Your photo from the booth">
+  <button class="btn" id="soloSave">Save to my phone</button>
+  <p class="tip">Or press and hold the photo, then tap Save.</p>
+</section>
+
+<p class="section-title" id="allTitle" hidden>Everyone's photos</p>
+<div class="grid" id="grid"></div>
+<p class="notice" id="notice" hidden></p>
+
+<dialog id="viewer">
+  <img id="viewerImg" alt="Booth photo">
+  <div class="dialog-actions">
+    <button class="btn" id="viewerSave">Save to my phone</button>
+    <button class="btn quiet" id="viewerClose">Close</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const params = new URLSearchParams(location.search);
+  const event = params.get("event") || "";
+  const single = params.get("photo") || "";
+  const ID_PATTERN = /^\d{13}-[0-9a-f]{8}\.jpg$/;
+  const shown = new Set();
+  let viewing = null;
+
+  const urlFor = (id) => `/photo/${event}/${id}`;
+
+  if (!/^[a-z0-9-]{3,60}$/.test(event)) {
+    $("#notice").textContent = "This gallery link is incomplete. Scan the code at the booth again.";
+    $("#notice").hidden = false;
+    return;
+  }
+
+  $("#title").textContent = event.replace(/-[a-z0-9]{3,6}$/, "").replace(/-/g, " ");
+
+  if (ID_PATTERN.test(single)) {
+    $("#solo").hidden = false;
+    $("#soloImg").src = urlFor(single);
+    $("#sub").textContent = "Here's your photo.";
+    $("#soloSave").addEventListener("click", () => savePhoto(single));
+  }
+
+  async function savePhoto(id) {
+    const url = urlFor(id);
+    try {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], "secret-pug-photo.jpg", { type: "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });   // iPhone: tap "Save Image"
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "secret-pug-photo.jpg";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (err) {
+      if (err && err.name === "AbortError") return;   // guest closed the share sheet
+      window.open(url, "_blank");
+    }
+  }
+
+  function open(id) {
+    viewing = id;
+    $("#viewerImg").src = urlFor(id);
+    $("#viewer").showModal();
+  }
+  $("#viewerClose").addEventListener("click", () => $("#viewer").close());
+  $("#viewerSave").addEventListener("click", () => viewing && savePhoto(viewing));
+  $("#viewer").addEventListener("click", (e) => { if (e.target === $("#viewer")) $("#viewer").close(); });
+
+  async function refresh() {
+    try {
+      const res = await fetch(`/api/photos?event=${event}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!data.ok) throw new Error();
+      const grid = $("#grid");
+      // newest first: add any new ids to the top, in order
+      const fresh = data.photos.filter((id) => !shown.has(id));
+      fresh.reverse().forEach((id) => {
+        shown.add(id);
+        const b = document.createElement("button");
+        b.setAttribute("aria-label", "Open photo");
+        const img = document.createElement("img");
+        img.loading = "lazy"; img.alt = "Booth photo"; img.src = urlFor(id);
+        b.appendChild(img);
+        b.addEventListener("click", () => open(id));
+        grid.prepend(b);
+      });
+      $("#allTitle").hidden = shown.size === 0;
+      if (!single) {
+        $("#sub").textContent = shown.size
+          ? `${shown.size} photo${shown.size === 1 ? "" : "s"} so far`
+          : "";
+        $("#notice").textContent = "No photos yet. They'll show up here as guests visit the booth.";
+        $("#notice").hidden = shown.size > 0;
+      }
+    } catch {
+      if (!shown.size) {
+        $("#notice").textContent = "The gallery didn't load. Check your connection and refresh.";
+        $("#notice").hidden = false;
+      }
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 20000);
+})();
+</script>
+</body>
+</html>

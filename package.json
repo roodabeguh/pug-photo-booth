@@ -1,0 +1,10 @@
+{
+  "name": "pug-photo-booth",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Kiosk page that uploads booth photos to an event gallery with a QR code per photo",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
