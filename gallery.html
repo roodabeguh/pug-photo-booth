@@ -73,6 +73,14 @@
 
   .notice { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 18px; }
 
+  .toolbar {
+    display: flex; gap: 12px; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; max-width: 1100px; margin: 40px auto 14px; padding: 0 20px;
+  }
+  .toolbar .section-title { margin: 0; }
+  .toolbar .btn { margin-top: 0; min-height: 50px; padding: 0 24px; font-size: 17px; }
+  .toolbar .btn[disabled] { opacity: .6; }
+
   dialog {
     border: 0; padding: 20px; background: var(--surface); color: var(--ink);
     border-radius: 24px; width: min(440px, 92vw); text-align: center;
@@ -83,6 +91,7 @@
   .dialog-actions .btn { margin-top: 18px; }
   .btn.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line); }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -98,7 +107,10 @@
   <p class="tip">Or press and hold the photo, then tap Save.</p>
 </section>
 
-<p class="section-title" id="allTitle" hidden>Everyone's photos</p>
+<div class="toolbar" id="toolbar" hidden>
+  <p class="section-title">Everyone&rsquo;s photos</p>
+  <button class="btn" id="downloadAll">Download all</button>
+</div>
 <div class="grid" id="grid"></div>
 <p class="notice" id="notice" hidden></p>
 
@@ -128,7 +140,7 @@
     return;
   }
 
-  $("#title").textContent = event.replace(/-[a-z0-9]{3,6}$/, "").replace(/-/g, " ");
+  $("#title").textContent = (event.replace(/-\d{8}-[a-z0-9]{3,8}$/, "").replace(/-[a-z0-9]{3,8}$/, "") || "Photo gallery").replace(/-/g, " ");
 
   if (ID_PATTERN.test(single)) {
     $("#solo").hidden = false;
@@ -184,7 +196,7 @@
         b.addEventListener("click", () => open(id));
         grid.prepend(b);
       });
-      $("#allTitle").hidden = shown.size === 0;
+      $("#toolbar").hidden = shown.size === 0;
       if (!single) {
         $("#sub").textContent = shown.size
           ? `${shown.size} photo${shown.size === 1 ? "" : "s"} so far`
@@ -199,6 +211,41 @@
       }
     }
   }
+
+  // Download every photo in this event as one zip file.
+  $("#downloadAll").addEventListener("click", async () => {
+    const btn = $("#downloadAll");
+    const ids = [...shown];
+    if (!ids.length) return;
+    const original = btn.textContent;
+    btn.disabled = true;
+    try {
+      const zip = new JSZip();
+      for (let i = 0; i < ids.length; i++) {
+        btn.textContent = `Getting ${i + 1} of ${ids.length}\u2026`;
+        const blob = await (await fetch(urlFor(ids[i]))).blob();
+        const stamp = Number(ids[i].slice(0, 13));
+        const d = new Date(stamp);
+        const pad = (n) => String(n).padStart(2, "0");
+        const name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+                     `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_` +
+                     `${String(i + 1).padStart(3, "0")}.jpg`;
+        zip.file(name, blob);
+      }
+      btn.textContent = "Zipping\u2026";
+      const out = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(out);
+      a.download = `${event}-photos.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch {
+      alert("The download didn't finish. Check your connection and try again.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
 
   refresh();
   setInterval(refresh, 20000);
