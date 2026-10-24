@@ -41,7 +41,6 @@
   .solo { display: grid; justify-items: center; padding: 20px 20px 8px; }
   .solo img {
     width: min(360px, 82vw); height: auto; display: block; background: var(--film);
-    transform: rotate(-2deg);
     box-shadow: 0 2px 0 rgba(44,20,48,.08), 0 24px 50px -12px rgba(44,20,48,.45);
     -webkit-touch-callout: default;
   }
@@ -67,9 +66,6 @@
     width: 100%; aspect-ratio: 54 / 86; object-fit: cover; display: block; background: var(--film);
     box-shadow: 0 10px 22px -10px rgba(44,20,48,.45);
   }
-  .grid button:nth-child(3n+1) img { transform: rotate(-1.5deg); }
-  .grid button:nth-child(3n+2) img { transform: rotate(1deg); }
-  .grid button:nth-child(3n) img { transform: rotate(-.5deg); }
 
   .notice { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 18px; }
 
