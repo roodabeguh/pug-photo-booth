@@ -45,10 +45,10 @@
     height: 100%;
     display: grid; grid-template-columns: 1fr 1fr;
     align-items: center; justify-items: center;
-    gap: 2vw; padding: 3vh 3vw;
+    gap: 2vw; padding: calc(env(safe-area-inset-top, 0px) + 120px) 3vw 3vh;
   }
   @media (orientation: portrait) {
-    .booth { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 2vh; }
+    .booth { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 2vh; padding-top: calc(env(safe-area-inset-top, 0px) + 120px); }
     .qr-card { width: min(62vw, 30vh, 320px); }
     .empty-print { height: auto; width: 46%; }
   }
@@ -103,8 +103,8 @@
 
   /* Logo: top-left, doubles as the hidden settings tap target */
   .logo {
-    position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 14px;
-    background: none; border: 0; padding: 6px; display: flex; align-items: center; gap: 10px; z-index: 5;
+    position: fixed; top: calc(env(safe-area-inset-top, 0px) - 4px); left: 6px;
+    background: none; border: 0; padding: 0; display: flex; align-items: center; gap: 10px; z-index: 5;
   }
   .logo img { height: 56px; width: auto; display: block; }
   .logo span { font-family: var(--display); font-size: 19px; }
@@ -411,6 +411,12 @@
       let n = row.size;
       x.font = row.font(n);
       while (x.measureText(row.text).width > maxW && n > row.min) { n -= 2; x.font = row.font(n); }
+      x.shadowColor = "transparent";
+      x.lineJoin = "round";
+      x.lineWidth = Math.max(8, n * 0.16);
+      x.strokeStyle = "#000000";
+      x.strokeText(row.text, W / 2, y);
+      x.fillStyle = "#fff6ea";
       x.fillText(row.text, W / 2, y);
       y -= n * 1.25;
     }
