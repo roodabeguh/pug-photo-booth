@@ -378,56 +378,83 @@
     });
   }
 
-  // Saved image: the photo fills a 1080x1920 Story-size frame, cropped to fit.
+  // Finds the rectangle that actually contains the photo, skipping see-through edges.
+  function visibleBox(img) {
+    const full = { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    const scale = Math.min(1, 600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const sw = Math.max(1, Math.round(img.naturalWidth * scale));
+    const sh = Math.max(1, Math.round(img.naturalHeight * scale));
+    const t = document.createElement("canvas");
+    t.width = sw; t.height = sh;
+    const tx = t.getContext("2d", { willReadFrequently: true });
+    tx.drawImage(img, 0, 0, sw, sh);
+    let data;
+    try { data = tx.getImageData(0, 0, sw, sh).data; } catch { return full; }
+
+    let minX = sw, minY = sh, maxX = -1, maxY = -1;
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        if (data[(y * sw + x) * 4 + 3] > 16) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return full;
+    const k = 1 / scale;
+    const x0 = Math.floor(minX * k), y0 = Math.floor(minY * k);
+    const x1 = Math.min(img.naturalWidth, Math.ceil((maxX + 1) * k));
+    const y1 = Math.min(img.naturalHeight, Math.ceil((maxY + 1) * k));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
   // No frame and no added background. The words sit over the bottom of the photo.
+  // Saved image: exactly the photo from the Evo app (its own border included).
+  // Nothing is added around it or cropped off. Your words are drawn over the bottom.
   async function makePrint(file) {
     const img = await loadImage(file);
-    const W = 1080, H = 1920;
+    const box = visibleBox(img);
+
+    // Keep the photo's own proportions. Cap the width so the file stays small.
+    const maxW = 1080;
+    const k = Math.min(1, maxW / box.w);
+    const W = Math.round(box.w * k), H = Math.round(box.h * k);
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const x = c.getContext("2d");
-
-    // Paint white first. A "no background" photo from the Evo app has transparent
-    // areas, and JPEG turns transparent into black unless something is underneath.
-    x.fillStyle = "#ffffff";
-    x.fillRect(0, 0, W, H);
-
-    const cover = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-    const dw = img.naturalWidth * cover, dh = img.naturalHeight * cover;
-    x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    x.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, W, H);
 
     try { await document.fonts.load('80px "Shrikhand"'); await document.fonts.load('600 30px "Figtree"'); } catch {}
 
+    const f = W / 1080;
     const rows = [];
-    rows.push({ text: settings.line1 || "Secret Pug Petting Zoo", font: (n) => `${n}px "Shrikhand", Georgia, serif`, size: 96, min: 40 });
-    if (settings.line2) rows.push({ text: settings.line2, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 52, min: 26 });
+    rows.push({ text: settings.line1 || "Secret Pug Petting Zoo", font: (n) => `${n}px "Shrikhand", Georgia, serif`, size: 96 * f, min: 40 * f });
+    if (settings.line2) rows.push({ text: settings.line2, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 52 * f, min: 26 * f });
     if (settings.showDate) {
       const date = new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
-      rows.push({ text: date, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 40, min: 22 });
+      rows.push({ text: date, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 40 * f, min: 22 * f });
     }
 
     x.textAlign = "center"; x.textBaseline = "middle";
-    x.shadowColor = "rgba(0, 0, 0, 0.6)"; x.shadowBlur = 24; x.shadowOffsetY = 4;
     x.fillStyle = "#fff6ea";
-    const maxW = W - 120;
-    // Stack the lines upward from a point above the bottom, clear of Instagram's buttons.
-    let y = H - 260;
+    x.lineJoin = "round";
+    const maxTextW = W * 0.9;
+    // Stack the lines upward from near the bottom edge of the photo.
+    let y = H - H * 0.06;
     for (let i = rows.length - 1; i >= 0; i--) {
       const row = rows[i];
       let n = row.size;
       x.font = row.font(n);
-      while (x.measureText(row.text).width > maxW && n > row.min) { n -= 2; x.font = row.font(n); }
-      x.shadowColor = "transparent";
-      x.lineJoin = "round";
-      x.lineWidth = Math.max(12, n * 0.22);
+      while (x.measureText(row.text).width > maxTextW && n > row.min) { n -= 2; x.font = row.font(n); }
+      x.lineWidth = Math.max(10 * f, n * 0.22);
       x.strokeStyle = "#000000";
       x.strokeText(row.text, W / 2, y);
-      x.fillStyle = "#fff6ea";
       x.fillText(row.text, W / 2, y);
       y -= n * 1.25;
     }
-    x.shadowColor = "transparent";
-    const url = c.toDataURL("image/jpeg", 0.9);
+    const url = c.toDataURL("image/jpeg", 0.92);
     return { preview: url, story: url };
   }
 
