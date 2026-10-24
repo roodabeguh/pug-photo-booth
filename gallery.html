@@ -75,6 +75,16 @@
   }
   .notice { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 18px; }
 
+  .saver {
+    position: fixed; inset: 0; z-index: 60; background: #2c1430;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 20px; box-sizing: border-box; height: 100vh; height: 100dvh; overflow: hidden;
+  }
+  .saver[hidden] { display: none; }
+  .saver-tip { color: #fff6ea; font-size: 17px; margin: 0; text-align: center; }
+  .saver img { display: block; max-width: 100%; max-height: 70vh; max-height: 70dvh; width: auto; height: auto; object-fit: contain; -webkit-touch-callout: default; -webkit-user-select: none; user-select: none; }
+  #saverDone { background: #f08a24; color: #2c1430; box-shadow: 0 5px 0 #b8611a; }
+  #saverDone:active { box-shadow: 0 2px 0 #b8611a; }
   .overlay {
     position: fixed; inset: 0; z-index: 50; height: 100vh; height: 100dvh; width: 100%;
     background: rgba(20, 8, 20, .7);
@@ -124,6 +134,12 @@
   </div>
 </div>
 
+<div class="saver" id="saver" hidden>
+  <p class="saver-tip">Press and hold the photo, then tap Save Image.</p>
+  <img id="saverImg" alt="Your photo">
+  <button class="btn" id="saverDone">Done</button>
+</div>
+
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -156,26 +172,18 @@
     });
   }
 
-  async function savePhoto(id, v) {
-    const url = urlFor(id, v.key);
-    try {
-      const blob = await (await fetch(url)).blob();
-      const name = `secret-pug-${v.folder}.jpg`;
-      const file = new File([blob], name, { type: "image/jpeg" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file] });   // iPhone: tap "Save Image"
-        return;
-      }
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch (err) {
-      if (err && err.name === "AbortError") return;   // guest closed the share sheet
-      window.open(url, "_blank");
-    }
+  // Opens the photo full screen. The guest presses and holds it, then taps Save Image.
+  function savePhoto(id, v) {
+    $("#saverImg").src = urlFor(id, v.key);
+    $("#saver").hidden = false;
+    lockPage(true);
   }
+
+  $("#saverDone").addEventListener("click", () => {
+    $("#saver").hidden = true;
+    $("#saverImg").removeAttribute("src");
+    lockPage(false);
+  });
 
   if (!/^[a-z0-9-]{3,60}$/.test(event)) {
     $("#notice").textContent = "This gallery link is incomplete. Scan the code at the booth again.";
