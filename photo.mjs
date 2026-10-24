@@ -1,9 +1,10 @@
 // GET /photo/<event>/<id>.jpg — serves one saved photo.
+// <id>.jpg is the original, <id>-post.jpg is 4:5, <id>-story.jpg is 9:16.
 
 import { getStore } from "@netlify/blobs";
 
 const EVENT_PATTERN = /^[a-z0-9-]{3,60}$/;
-const ID_PATTERN = /^\d{13}-[0-9a-f]{8}\.jpg$/;
+const ID_PATTERN = /^\d{13}-[0-9a-f]{8}(?:-post|-story)?\.jpg$/;
 
 export default async (req, context) => {
   const { event, id } = context.params || {};
