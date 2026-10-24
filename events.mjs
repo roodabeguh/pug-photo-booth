@@ -1,7 +1,9 @@
-// GET /api/events — lists every event folder with its photo count.
+// GET /api/events — lists every event folder with its photo count (one per photo).
 // Header: x-booth-key: <BOOTH_KEY>
 
 import { getStore } from "@netlify/blobs";
+
+const BASE_ID = /^\d{13}-[0-9a-f]{8}\.jpg$/;
 
 const json = (status, body) =>
   new Response(JSON.stringify(body), {
@@ -21,12 +23,11 @@ export default async (req) => {
   for (const dir of directories) {
     const name = String(dir).replace(/\/$/, "");
     const { blobs } = await store.list({ prefix: `${name}/` });
-    const photos = blobs.filter((b) => b.key.endsWith(".jpg")).length;
-    const newest = blobs.map((b) => b.key.split("/").pop()).sort().pop() || "";
+    const ids = blobs.map((b) => b.key.split("/").pop()).filter((id) => BASE_ID.test(id)).sort();
     events.push({
       event: name,
-      photos,
-      lastPhotoMs: newest ? Number(newest.slice(0, 13)) : 0,
+      photos: ids.length,
+      lastPhotoMs: ids.length ? Number(ids[ids.length - 1].slice(0, 13)) : 0,
     });
   }
 
