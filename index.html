@@ -377,78 +377,45 @@
     });
   }
 
-  // Instagram Story / Reel size: 1080x1920. The print sits centered on a soft
-  // blurred copy of itself, clear of the top and bottom areas Instagram covers.
-  function toStory(src) {
+  // Saved image: the photo fills a 1080x1920 Story-size frame, cropped to fit.
+  // No frame and no added background. The words sit over the bottom of the photo.
+  async function makePrint(file) {
+    const img = await loadImage(file);
     const W = 1080, H = 1920;
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const x = c.getContext("2d");
 
-    x.fillStyle = "#f2dcb6";
-    x.fillRect(0, 0, W, H);
-    const cover = Math.max(W / src.width, H / src.height);
-    const bw = src.width * cover, bh = src.height * cover;
-    x.save();
-    if ("filter" in x) x.filter = "blur(30px)";
-    x.drawImage(src, (W - bw) / 2, (H - bh) / 2, bw, bh);
-    x.restore();
-    x.fillStyle = "rgba(242, 220, 182, 0.35)";
-    x.fillRect(0, 0, W, H);
-
-    // Print is sized to exactly fill the middle 4:5 band (1080x1350), which is the
-    // part a feed post shows. Story and Reel show the whole 9:16 frame around it.
-    const pw = 848, ph = pw * src.height / src.width;
-    x.shadowColor = "rgba(44, 20, 48, 0.45)";
-    x.shadowBlur = 60; x.shadowOffsetY = 20;
-    x.drawImage(src, (W - pw) / 2, (H - ph) / 2, pw, ph);
-    x.shadowColor = "transparent";
-
-    return c.toDataURL("image/jpeg", 0.9);
-  }
-
-  async function makePrint(file) {
-    const img = await loadImage(file);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    // Instax Mini proportions: 54x86 mm film, 46x62 mm picture.
-    const mm = 20;
-    const W = 54 * mm, H = 86 * mm, pw = 46 * mm, ph = 62 * mm, px = 4 * mm, py = 6 * mm;
-    canvas.width = W; canvas.height = H;
-    ctx.fillStyle = "#fbfaf6";
-    ctx.fillRect(0, 0, W, H);
-
-    const target = pw / ph, ratio = img.naturalWidth / img.naturalHeight;
-    let sw, sh, sx, sy;
-    if (ratio > target) { sh = img.naturalHeight; sw = sh * target; sx = (img.naturalWidth - sw) / 2; sy = 0; }
-    else { sw = img.naturalWidth; sh = sw / target; sx = 0; sy = (img.naturalHeight - sh) / 2; }
-    ctx.drawImage(img, sx, sy, sw, sh, px, py, pw, ph);
+    const cover = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    const dw = img.naturalWidth * cover, dh = img.naturalHeight * cover;
+    x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
 
     try { await document.fonts.load('80px "Shrikhand"'); await document.fonts.load('600 30px "Figtree"'); } catch {}
 
-    const bottomTop = py + ph, bottomH = H - bottomTop, maxW = W - px * 2 - 60;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-
     const rows = [];
-    const line1 = settings.line1 || "Secret Pug Petting Zoo";
-    rows.push({ text: line1, font: (n) => `${n}px "Shrikhand", Georgia, serif`, size: 68, min: 30, color: "#2c1430" });
-    if (settings.line2) rows.push({ text: settings.line2, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 40, min: 22, color: "#2c1430" });
+    rows.push({ text: settings.line1 || "Secret Pug Petting Zoo", font: (n) => `${n}px "Shrikhand", Georgia, serif`, size: 96, min: 40 });
+    if (settings.line2) rows.push({ text: settings.line2, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 52, min: 26 });
     if (settings.showDate) {
       const date = new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
-      rows.push({ text: date, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: rows.length >= 2 ? 26 : 30, min: 20, color: "#7a5a6e" });
+      rows.push({ text: date, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 40, min: 22 });
     }
 
-    rows.forEach((row, i) => {
+    x.textAlign = "center"; x.textBaseline = "middle";
+    x.shadowColor = "rgba(0, 0, 0, 0.6)"; x.shadowBlur = 24; x.shadowOffsetY = 4;
+    x.fillStyle = "#fff6ea";
+    const maxW = W - 120;
+    // Stack the lines upward from a point above the bottom, clear of Instagram's buttons.
+    let y = H - 260;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
       let n = row.size;
-      ctx.font = row.font(n);
-      while (ctx.measureText(row.text).width > maxW && n > row.min) { n -= 2; ctx.font = row.font(n); }
-      ctx.fillStyle = row.color;
-      const y = bottomTop + bottomH * ((i + 1) / (rows.length + 1)) - (rows.length === 1 ? 0 : 6);
-      ctx.fillText(row.text, W / 2, y);
-    });
-
-    return { preview: canvas.toDataURL("image/jpeg", 0.92), story: toStory(canvas) };
+      x.font = row.font(n);
+      while (x.measureText(row.text).width > maxW && n > row.min) { n -= 2; x.font = row.font(n); }
+      x.fillText(row.text, W / 2, y);
+      y -= n * 1.25;
+    }
+    x.shadowColor = "transparent";
+    return c.toDataURL("image/jpeg", 0.9);
   }
 
   async function upload(image) {
