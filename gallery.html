@@ -81,10 +81,8 @@
     gap: 16px; padding: 20px; box-sizing: border-box; height: 100vh; height: 100dvh; overflow: hidden;
   }
   .saver[hidden] { display: none; }
-  .saver-tip { color: #fff6ea; font-size: 17px; margin: 0; text-align: center; }
-  .saver img { display: block; max-width: 100%; max-height: 70vh; max-height: 70dvh; width: auto; height: auto; object-fit: contain; -webkit-touch-callout: default; -webkit-user-select: none; user-select: none; }
-  #saverDone { background: #f08a24; color: #2c1430; box-shadow: 0 5px 0 #b8611a; }
-  #saverDone:active { box-shadow: 0 2px 0 #b8611a; }
+  .saver-tip { color: #fff6ea; font-size: 24px; line-height: 1.25; font-weight: 500; margin: 0; text-align: center; }
+  .saver img { display: block; max-width: 100%; max-height: 56vh; max-height: 56dvh; width: auto; height: auto; object-fit: contain; -webkit-touch-callout: default; -webkit-user-select: none; user-select: none; }
   .overlay {
     position: fixed; inset: 0; z-index: 50; height: 100vh; height: 100dvh; width: 100%;
     background: rgba(20, 8, 20, .7);
@@ -135,9 +133,9 @@
 </div>
 
 <div class="saver" id="saver" hidden>
-  <p class="saver-tip">Press and hold the photo, then tap Save Image.</p>
+  <p class="saver-tip">Press and hold the photo to save</p>
   <img id="saverImg" alt="Your photo">
-  <button class="btn" id="saverDone">Done</button>
+  <button class="btn" id="saverDone">Close</button>
 </div>
 
 <script>
