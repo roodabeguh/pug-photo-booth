@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=Shrikhand&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --bg: #f2dcb6; --surface: #fbf0de; --ink: #2c1430; --muted: #6e5266;
@@ -44,19 +45,26 @@
     box-shadow: 0 2px 0 rgba(44,20,48,.08), 0 24px 50px -12px rgba(44,20,48,.45);
     -webkit-touch-callout: default;
   }
+  .choices { display: grid; gap: 12px; width: min(360px, 90vw); margin-top: 28px; }
   .btn {
     display: inline-flex; align-items: center; justify-content: center;
-    min-height: 58px; padding: 0 32px; margin-top: 32px; border-radius: 999px; border: 0;
-    background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 19px;
-    text-decoration: none;
+    min-height: 58px; padding: 0 24px; border-radius: 999px; border: 0;
+    background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 18px;
     box-shadow: 0 5px 0 color-mix(in srgb, var(--accent) 55%, var(--ink));
   }
   .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 55%, var(--ink)); }
+  .btn.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line); }
+  .btn.quiet:active { transform: none; }
   .tip { color: var(--muted); font-size: 15px; margin: 14px 0 0; text-align: center; }
 
   /* Gallery grid */
-  .section-title { font-weight: 800; font-size: 18px; margin: 40px 20px 14px; max-width: 1100px; }
-  @media (min-width: 1140px) { .section-title { margin-inline: auto; } }
+  .toolbar {
+    display: flex; gap: 12px; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; max-width: 1100px; margin: 40px auto 14px; padding: 0 20px;
+  }
+  .section-title { font-weight: 800; font-size: 18px; margin: 0; }
+  .toolbar .btn { min-height: 50px; padding: 0 24px; font-size: 17px; }
+  .toolbar .btn[disabled] { opacity: .6; }
   .grid {
     display: grid; gap: 18px; padding: 0 20px 48px; max-width: 1100px; margin: 0 auto;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -66,16 +74,7 @@
     width: 100%; aspect-ratio: 54 / 86; object-fit: cover; display: block; background: var(--film);
     box-shadow: 0 10px 22px -10px rgba(44,20,48,.45);
   }
-
   .notice { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 18px; }
-
-  .toolbar {
-    display: flex; gap: 12px; align-items: center; justify-content: space-between;
-    flex-wrap: wrap; max-width: 1100px; margin: 40px auto 14px; padding: 0 20px;
-  }
-  .toolbar .section-title { margin: 0; }
-  .toolbar .btn { margin-top: 0; min-height: 50px; padding: 0 24px; font-size: 17px; }
-  .toolbar .btn[disabled] { opacity: .6; }
 
   dialog {
     border: 0; padding: 20px; background: var(--surface); color: var(--ink);
@@ -83,11 +82,8 @@
   }
   dialog::backdrop { background: rgba(20, 8, 20, .7); }
   dialog img { width: 100%; height: auto; display: block; -webkit-touch-callout: default; }
-  .dialog-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .dialog-actions .btn { margin-top: 18px; }
-  .btn.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line); }
+  dialog .choices { margin: 18px auto 0; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -99,8 +95,8 @@
 
 <section class="solo" id="solo" hidden>
   <img id="soloImg" alt="Your photo from the booth">
-  <button class="btn" id="soloSave">Save to my phone</button>
-  <p class="tip">Or press and hold the photo, then tap Save.</p>
+  <p class="tip">Pick the size for where you're posting.</p>
+  <div class="choices" id="soloChoices"></div>
 </section>
 
 <div class="toolbar" id="toolbar" hidden>
@@ -112,10 +108,8 @@
 
 <dialog id="viewer">
   <img id="viewerImg" alt="Booth photo">
-  <div class="dialog-actions">
-    <button class="btn" id="viewerSave">Save to my phone</button>
-    <button class="btn quiet" id="viewerClose">Close</button>
-  </div>
+  <div class="choices" id="viewerChoices"></div>
+  <div class="choices"><button class="btn quiet" id="viewerClose">Close</button></div>
 </dialog>
 
 <script>
@@ -125,10 +119,51 @@
   const event = params.get("event") || "";
   const single = params.get("photo") || "";
   const ID_PATTERN = /^\d{13}-[0-9a-f]{8}\.jpg$/;
+
+  // Each photo is saved in all three shapes.
+  const VARIANTS = [
+    { key: "",      folder: "original", label: "Save original photo" },
+    { key: "post",  folder: "post",     label: "Save for Instagram Post" },
+    { key: "story", folder: "story",    label: "Save for Instagram or TikTok Story and Reel" },
+  ];
+
   const shown = new Set();
   let viewing = null;
 
-  const urlFor = (id) => `/photo/${event}/${id}`;
+  const variantName = (id, key) => (key ? id.replace(/\.jpg$/, `-${key}.jpg`) : id);
+  const urlFor = (id, key = "") => `/photo/${event}/${variantName(id, key)}`;
+
+  function makeButtons(container, onPick) {
+    container.innerHTML = "";
+    VARIANTS.forEach((v) => {
+      const b = document.createElement("button");
+      b.className = "btn" + (v.key ? "" : " quiet");
+      b.textContent = v.label;
+      b.addEventListener("click", () => onPick(v));
+      container.append(b);
+    });
+  }
+
+  async function savePhoto(id, v) {
+    const url = urlFor(id, v.key);
+    try {
+      const blob = await (await fetch(url)).blob();
+      const name = `secret-pug-${v.folder}.jpg`;
+      const file = new File([blob], name, { type: "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });   // iPhone: tap "Save Image"
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (err) {
+      if (err && err.name === "AbortError") return;   // guest closed the share sheet
+      window.open(url, "_blank");
+    }
+  }
 
   if (!/^[a-z0-9-]{3,60}$/.test(event)) {
     $("#notice").textContent = "This gallery link is incomplete. Scan the code at the booth again.";
@@ -138,42 +173,20 @@
 
   $("#title").textContent = (event.replace(/-\d{8}-[a-z0-9]{3,8}$/, "").replace(/-[a-z0-9]{3,8}$/, "") || "Photo gallery").replace(/-/g, " ");
 
-  const soloView = ID_PATTERN.test(single);
-  if (soloView) {
-    $("#grid").hidden = true;
+  if (ID_PATTERN.test(single)) {
     $("#solo").hidden = false;
     $("#soloImg").src = urlFor(single);
     $("#sub").textContent = "Here's your photo.";
-    $("#soloSave").addEventListener("click", () => savePhoto(single));
-  }
-
-  async function savePhoto(id) {
-    const url = urlFor(id);
-    try {
-      const blob = await (await fetch(url)).blob();
-      const file = new File([blob], "secret-pug-photo.jpg", { type: "image/jpeg" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file] });   // iPhone: tap "Save Image"
-        return;
-      }
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "secret-pug-photo.jpg";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch (err) {
-      if (err && err.name === "AbortError") return;   // guest closed the share sheet
-      window.open(url, "_blank");
-    }
+    makeButtons($("#soloChoices"), (v) => savePhoto(single, v));
   }
 
   function open(id) {
     viewing = id;
     $("#viewerImg").src = urlFor(id);
+    makeButtons($("#viewerChoices"), (v) => viewing && savePhoto(viewing, v));
     $("#viewer").showModal();
   }
   $("#viewerClose").addEventListener("click", () => $("#viewer").close());
-  $("#viewerSave").addEventListener("click", () => viewing && savePhoto(viewing));
   $("#viewer").addEventListener("click", (e) => { if (e.target === $("#viewer")) $("#viewer").close(); });
 
   async function refresh() {
@@ -182,7 +195,6 @@
       const data = await res.json();
       if (!data.ok) throw new Error();
       const grid = $("#grid");
-      // newest first: add any new ids to the top, in order
       const fresh = data.photos.filter((id) => !shown.has(id));
       fresh.reverse().forEach((id) => {
         shown.add(id);
@@ -194,7 +206,7 @@
         b.addEventListener("click", () => open(id));
         grid.prepend(b);
       });
-      $("#toolbar").hidden = soloView || shown.size === 0;
+      $("#toolbar").hidden = shown.size === 0;
       if (!single) {
         $("#sub").textContent = shown.size
           ? `${shown.size} photo${shown.size === 1 ? "" : "s"} so far`
@@ -210,7 +222,15 @@
     }
   }
 
-  // Download every photo in this event as one zip file.
+  // Download all: one zip with three folders (original, post, story).
+  const pad = (n) => String(n).padStart(2, "0");
+  function fileStamp(id, seq) {
+    const d = new Date(Number(id.slice(0, 13)));
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+           `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_` +
+           `${String(seq).padStart(3, "0")}.jpg`;
+  }
+
   $("#downloadAll").addEventListener("click", async () => {
     const btn = $("#downloadAll");
     const ids = [...shown];
@@ -220,15 +240,11 @@
     try {
       const zip = new JSZip();
       for (let i = 0; i < ids.length; i++) {
-        btn.textContent = `Getting ${i + 1} of ${ids.length}\u2026`;
-        const blob = await (await fetch(urlFor(ids[i]))).blob();
-        const stamp = Number(ids[i].slice(0, 13));
-        const d = new Date(stamp);
-        const pad = (n) => String(n).padStart(2, "0");
-        const name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
-                     `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_` +
-                     `${String(i + 1).padStart(3, "0")}.jpg`;
-        zip.file(name, blob);
+        for (const v of VARIANTS) {
+          btn.textContent = `Getting ${i + 1} of ${ids.length}\u2026`;
+          const blob = await (await fetch(urlFor(ids[i], v.key))).blob();
+          zip.file(`${v.folder}/${fileStamp(ids[i], i + 1)}`, blob);
+        }
       }
       btn.textContent = "Zipping\u2026";
       const out = await zip.generateAsync({ type: "blob" });
