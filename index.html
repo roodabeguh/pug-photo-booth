@@ -415,7 +415,8 @@
       y -= n * 1.25;
     }
     x.shadowColor = "transparent";
-    return c.toDataURL("image/jpeg", 0.9);
+    const url = c.toDataURL("image/jpeg", 0.9);
+    return { preview: url, story: url };
   }
 
   async function upload(image) {
