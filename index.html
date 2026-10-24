@@ -58,12 +58,11 @@
   .print {
     max-width: 100%; max-height: 100%; width: auto; display: block; background: var(--film);
     box-shadow: 0 2px 0 rgba(44,20,48,.08), 0 24px 50px -12px rgba(44,20,48,.45);
-    transform: rotate(-3deg);
     animation: drop .5s cubic-bezier(.2,.9,.3,1.2) both;
   }
-  @keyframes drop { from { transform: translateY(-36px) rotate(-9deg); opacity: 0; } to { transform: rotate(-3deg); opacity: 1; } }
+  @keyframes drop { from { transform: translateY(-36px); opacity: 0; } to { transform: none; opacity: 1; } }
   .empty-print {
-    height: 86%; aspect-ratio: 54 / 86; background: var(--film); transform: rotate(-3deg);
+    height: 86%; aspect-ratio: 54 / 86; background: var(--film);
     box-shadow: 0 24px 50px -12px rgba(44,20,48,.45);
     display: grid; grid-template-rows: 72% 1fr; padding: 6% 6% 0;
   }
@@ -153,6 +152,7 @@
       <div id="rightStart" style="display:grid;justify-items:center;text-align:center">
         <p class="event-label" id="eventLabel"></p>
         <p class="event-sub" id="eventSub"></p>
+        <p class="event-sub" id="eventCode" style="font-size:clamp(13px,1.3vw,16px);margin:-14px 0 22px"></p>
         <button class="btn" id="loadBtn">Load the photo</button>
       </div>
 
@@ -192,7 +192,6 @@
   <input class="field" id="setLine2" maxlength="40" autocomplete="off" placeholder="Secret Pug Petting Zoo">
 
   <label class="check"><input type="checkbox" id="setDate"> Add the date under the words</label>
-  <label class="check"><input type="checkbox" id="setFrame"> Add the Instax-style frame</label>
 
   <p class="small-note" style="margin-top:20px">Gallery link for the host:<br><span class="gallery-link" id="galleryLink"></span></p>
   <p class="small-note" style="margin-top:14px">Setup link for a new device (opens it already signed in):<br><span class="gallery-link" id="setupLink"></span></p>
@@ -257,7 +256,14 @@
 
   function paintLabel() {
     $("#eventLabel").textContent = settings.line1 || "Secret Pug Petting Zoo";
-    $("#eventSub").textContent = settings.line2 || "";
+    const sub = [settings.line2].filter(Boolean).join(" ");
+    $("#eventSub").textContent = sub;
+    // Event code and date come from the event's own name, so each event is distinguishable.
+    const ev = eventName(false);
+    const code = ev.split("-").pop();
+    const m = ev.match(/-(\d{4})(\d{2})(\d{2})-/);
+    const date = m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : "";
+    $("#eventCode").textContent = [date, "Event code " + code].filter(Boolean).join("  \u00b7  ");
   }
 
   function reset() {
@@ -284,7 +290,6 @@
     $("#setLine1").value = settings.line1;
     $("#setLine2").value = settings.line2;
     $("#setDate").checked = settings.showDate;
-    $("#setFrame").checked = settings.frame;
     $("#galleryLink").textContent = settings.key ? galleryUrl() : "Enter the booth key first.";
     $("#setupLink").textContent = settings.key ? `${location.origin}/#k=${encodeURIComponent(settings.key)}` : "Enter the booth key first.";
     $("#settings").showModal();
@@ -295,7 +300,6 @@
     settings.line1 = $("#setLine1").value.trim();
     settings.line2 = $("#setLine2").value.trim();
     settings.showDate = $("#setDate").checked;
-    settings.frame = $("#setFrame").checked;
     save();
     paintLabel();
     $("#settings").close();
@@ -373,18 +377,38 @@
     });
   }
 
+  // Instagram Story / Reel size: 1080x1920. The print sits centered on a soft
+  // blurred copy of itself, clear of the top and bottom areas Instagram covers.
+  function toStory(src) {
+    const W = 1080, H = 1920;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const x = c.getContext("2d");
+
+    x.fillStyle = "#f2dcb6";
+    x.fillRect(0, 0, W, H);
+    const cover = Math.max(W / src.width, H / src.height);
+    const bw = src.width * cover, bh = src.height * cover;
+    x.save();
+    if ("filter" in x) x.filter = "blur(30px)";
+    x.drawImage(src, (W - bw) / 2, (H - bh) / 2, bw, bh);
+    x.restore();
+    x.fillStyle = "rgba(242, 220, 182, 0.35)";
+    x.fillRect(0, 0, W, H);
+
+    const pw = 860, ph = pw * src.height / src.width;
+    x.shadowColor = "rgba(44, 20, 48, 0.45)";
+    x.shadowBlur = 60; x.shadowOffsetY = 20;
+    x.drawImage(src, (W - pw) / 2, (H - ph) / 2, pw, ph);
+    x.shadowColor = "transparent";
+
+    return c.toDataURL("image/jpeg", 0.9);
+  }
+
   async function makePrint(file) {
     const img = await loadImage(file);
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-
-    if (!settings.frame) {
-      const scale = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
-      canvas.width = Math.round(img.naturalWidth * scale);
-      canvas.height = Math.round(img.naturalHeight * scale);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.88);
-    }
 
     // Instax Mini proportions: 54x86 mm film, 46x62 mm picture.
     const mm = 20;
@@ -405,7 +429,8 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
 
     const rows = [];
-    if (settings.line1) rows.push({ text: settings.line1, font: (n) => `${n}px "Shrikhand", Georgia, serif`, size: 68, min: 30, color: "#2c1430" });
+    const line1 = settings.line1 || "Secret Pug Petting Zoo";
+    rows.push({ text: line1, font: (n) => `${n}px "Shrikhand", Georgia, serif`, size: 68, min: 30, color: "#2c1430" });
     if (settings.line2) rows.push({ text: settings.line2, font: (n) => `600 ${n}px "Figtree", Helvetica, Arial, sans-serif`, size: 40, min: 22, color: "#2c1430" });
     if (settings.showDate) {
       const date = new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
@@ -421,7 +446,7 @@
       ctx.fillText(row.text, W / 2, y);
     });
 
-    return canvas.toDataURL("image/jpeg", 0.88);
+    return toStory(canvas);
   }
 
   async function upload(image) {
