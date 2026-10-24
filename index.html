@@ -194,6 +194,7 @@
 
   <label class="check"><input type="checkbox" id="setDate"> Add the date under the words</label>
 
+
   <p class="small-note" style="margin-top:20px">Gallery link for the host:<br><span class="gallery-link" id="galleryLink"></span></p>
   <p class="small-note" style="margin-top:14px">Setup link for a new device (opens it already signed in):<br><span class="gallery-link" id="setupLink"></span></p>
 
@@ -327,8 +328,8 @@
     for (const file of files) {
       status.textContent = `Adding ${done + failed + 1} of ${files.length}\u2026`;
       try {
-        const { story } = await makePrint(file);
-        await upload(story.split(",")[1]);
+        const { versions } = await makePrint(file);
+        await upload(versions);
         done++;
       } catch {
         failed++;
@@ -355,11 +356,11 @@
     busy = true;
     showRight("rightBusy");
     try {
-      const { preview, story } = await makePrint(file);
+      const { preview, versions } = await makePrint(file);
       $("#emptyPrint").hidden = true;
       $("#printImg").src = preview;
       $("#printImg").hidden = false;
-      await post(story.split(",")[1]);
+      await post(versions);
     } catch (err) {
       fail(err.message || "That file couldn&rsquo;t be opened.");
     } finally {
@@ -411,22 +412,37 @@
   }
 
   // No frame and no added background. The words sit over the bottom of the photo.
-  // Saved image: exactly the photo from the Evo app (its own border included).
-  // Nothing is added around it or cropped off. Your words are drawn over the bottom.
+  // Three versions are made from the same photo: original (as it is),
+  // post (4:5) and story (9:16). Nothing is added around any of them.
   async function makePrint(file) {
     const img = await loadImage(file);
     const box = visibleBox(img);
+    try { await document.fonts.load('80px "Shrikhand"'); await document.fonts.load('600 30px "Figtree"'); } catch {}
+    const versions = {
+      original: renderVersion(img, box, null),
+      post: renderVersion(img, box, 4 / 5),
+      story: renderVersion(img, box, 9 / 16),
+    };
+    return { preview: "data:image/jpeg;base64," + versions.original, versions };
+  }
 
-    // Keep the photo's own proportions. Cap the width so the file stays small.
-    const maxW = 1080;
-    const k = Math.min(1, maxW / box.w);
-    const W = Math.round(box.w * k), H = Math.round(box.h * k);
+  function renderVersion(img, box0, ratio) {
+    const box = { ...box0 };
+    let W, H;
+    if (ratio) {
+      // Center-crop to the shape. The photo is not padded or filled.
+      if (box.w / box.h > ratio) { const nw = box.h * ratio; box.x += (box.w - nw) / 2; box.w = nw; }
+      else { const nh = box.w / ratio; box.y += (box.h - nh) / 2; box.h = nh; }
+      W = 1080; H = Math.round(1080 / ratio);
+    } else {
+      const k = Math.min(1, 1080 / box.w);
+      W = Math.round(box.w * k); H = Math.round(box.h * k);
+    }
+
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const x = c.getContext("2d");
     x.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, W, H);
-
-    try { await document.fonts.load('80px "Shrikhand"'); await document.fonts.load('600 30px "Figtree"'); } catch {}
 
     const f = W / 1080;
     const rows = [];
@@ -441,7 +457,6 @@
     x.fillStyle = "#fff6ea";
     x.lineJoin = "round";
     const maxTextW = W * 0.9;
-    // Stack the lines upward from near the bottom edge of the photo.
     let y = H - H * 0.06;
     for (let i = rows.length - 1; i >= 0; i--) {
       const row = rows[i];
@@ -454,18 +469,17 @@
       x.fillText(row.text, W / 2, y);
       y -= n * 1.25;
     }
-    const url = c.toDataURL("image/jpeg", 0.92);
-    return { preview: url, story: url };
+    return c.toDataURL("image/jpeg", 0.92).split(",")[1];
   }
 
-  async function upload(image) {
+  async function upload(images) {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 30000);
     try {
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-booth-key": settings.key },
-        body: JSON.stringify({ event: eventName(false), image }),
+        body: JSON.stringify({ event: eventName(false), images }),
         signal: ctrl.signal,
       });
       const data = await res.json().catch(() => ({}));
@@ -476,9 +490,9 @@
     }
   }
 
-  async function post(image) {
+  async function post(versions) {
     try {
-      const data = await upload(image);
+      const data = await upload(versions);
       $("#qr").innerHTML = "";
       new QRCode($("#qr"), {
         text: data.viewUrl, width: 512, height: 512,
