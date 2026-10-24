@@ -31,10 +31,11 @@
     }
   }
   *, *::before, *::after { box-sizing: inherit; }
-  html, body { height: 100%; margin: 0; }
+  html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; position: fixed; inset: 0; }
   body {
     background: var(--bg); color: var(--ink); font-family: var(--body);
-    -webkit-user-select: none; user-select: none; touch-action: manipulation; overflow: hidden;
+    -webkit-user-select: none; user-select: none; touch-action: manipulation;
+    position: fixed; inset: 0;
   }
   [hidden] { display: none !important; }
   button { font: inherit; color: inherit; cursor: pointer; }
@@ -103,7 +104,7 @@
 
   /* Logo: top-left, doubles as the hidden settings tap target */
   .logo {
-    position: fixed; top: 0; left: 6px;
+    position: absolute; top: 0; left: 6px;
     background: none; border: 0; padding: 0; display: flex; align-items: center; gap: 10px; z-index: 5;
   }
   .logo img { height: 56px; width: auto; display: block; }
@@ -385,6 +386,11 @@
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const x = c.getContext("2d");
+
+    // Paint white first. A "no background" photo from the Evo app has transparent
+    // areas, and JPEG turns transparent into black unless something is underneath.
+    x.fillStyle = "#ffffff";
+    x.fillRect(0, 0, W, H);
 
     const cover = Math.max(W / img.naturalWidth, H / img.naturalHeight);
     const dw = img.naturalWidth * cover, dh = img.naturalHeight * cover;
