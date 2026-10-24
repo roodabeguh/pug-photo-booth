@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=Shrikhand&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --bg: #f2dcb6; --surface: #fbf0de; --ink: #2c1430; --muted: #6e5266;
@@ -78,10 +77,11 @@
 
   dialog {
     border: 0; padding: 20px; background: var(--surface); color: var(--ink);
-    border-radius: 24px; width: min(440px, 92vw); text-align: center;
+    border-radius: 24px; width: min(440px, 92vw); max-height: 92vh; overflow: hidden;
+    position: fixed; inset: 0; margin: auto; height: fit-content; text-align: center;
   }
   dialog::backdrop { background: rgba(20, 8, 20, .7); }
-  dialog img { width: 100%; height: auto; display: block; -webkit-touch-callout: default; }
+  dialog img { display: block; width: 100%; height: auto; max-height: 58vh; object-fit: contain; margin: 0 auto; -webkit-touch-callout: default; }
   dialog .choices { margin: 18px auto 0; }
 </style>
 </head>
@@ -101,7 +101,6 @@
 
 <div class="toolbar" id="toolbar" hidden>
   <p class="section-title">Everyone&rsquo;s photos</p>
-  <button class="btn" id="downloadAll">Download all</button>
 </div>
 <div class="grid" id="grid"></div>
 <p class="notice" id="notice" hidden></p>
@@ -122,7 +121,7 @@
 
   // Each photo is saved in all three shapes.
   const VARIANTS = [
-    { key: "",      folder: "original", label: "Save original photo" },
+    { key: "",      folder: "original", label: "Save Original Photo" },
     { key: "post",  folder: "post",     label: "Save for Instagram Post" },
     { key: "story", folder: "story",    label: "Save for Instagram or TikTok Story and Reel" },
   ];
@@ -137,7 +136,7 @@
     container.innerHTML = "";
     VARIANTS.forEach((v) => {
       const b = document.createElement("button");
-      b.className = "btn" + (v.key ? "" : " quiet");
+      b.className = "btn";
       b.textContent = v.label;
       b.addEventListener("click", () => onPick(v));
       container.append(b);
@@ -221,45 +220,6 @@
       }
     }
   }
-
-  // Download all: one zip with three folders (original, post, story).
-  const pad = (n) => String(n).padStart(2, "0");
-  function fileStamp(id, seq) {
-    const d = new Date(Number(id.slice(0, 13)));
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
-           `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_` +
-           `${String(seq).padStart(3, "0")}.jpg`;
-  }
-
-  $("#downloadAll").addEventListener("click", async () => {
-    const btn = $("#downloadAll");
-    const ids = [...shown];
-    if (!ids.length) return;
-    const original = btn.textContent;
-    btn.disabled = true;
-    try {
-      const zip = new JSZip();
-      for (let i = 0; i < ids.length; i++) {
-        for (const v of VARIANTS) {
-          btn.textContent = `Getting ${i + 1} of ${ids.length}\u2026`;
-          const blob = await (await fetch(urlFor(ids[i], v.key))).blob();
-          zip.file(`${v.folder}/${fileStamp(ids[i], i + 1)}`, blob);
-        }
-      }
-      btn.textContent = "Zipping\u2026";
-      const out = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(out);
-      a.download = `${event}-photos.zip`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    } catch {
-      alert("The download didn't finish. Check your connection and try again.");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = original;
-    }
-  });
 
   refresh();
   setInterval(refresh, 20000);
