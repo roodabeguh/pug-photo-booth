@@ -192,6 +192,7 @@
   $("#title").textContent = (event.replace(/-\d{8}-[a-z0-9]{3,8}$/, "").replace(/-[a-z0-9]{3,8}$/, "") || "Photo gallery").replace(/-/g, " ");
 
   if (ID_PATTERN.test(single)) {
+    $("#title").hidden = true;   // the header already shows the brand name
     $("#solo").hidden = false;
     $("#soloImg").src = urlFor(single);
     $("#sub").textContent = "Here's your photo.";
