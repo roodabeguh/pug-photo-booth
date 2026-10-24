@@ -326,8 +326,8 @@
     for (const file of files) {
       status.textContent = `Adding ${done + failed + 1} of ${files.length}\u2026`;
       try {
-        const dataUrl = await makePrint(file);
-        await upload(dataUrl.split(",")[1]);
+        const { story } = await makePrint(file);
+        await upload(story.split(",")[1]);
         done++;
       } catch {
         failed++;
@@ -354,11 +354,11 @@
     busy = true;
     showRight("rightBusy");
     try {
-      const dataUrl = await makePrint(file);
+      const { preview, story } = await makePrint(file);
       $("#emptyPrint").hidden = true;
-      $("#printImg").src = dataUrl;
+      $("#printImg").src = preview;
       $("#printImg").hidden = false;
-      await post(dataUrl.split(",")[1]);
+      await post(story.split(",")[1]);
     } catch (err) {
       fail(err.message || "That file couldn&rsquo;t be opened.");
     } finally {
@@ -396,7 +396,9 @@
     x.fillStyle = "rgba(242, 220, 182, 0.35)";
     x.fillRect(0, 0, W, H);
 
-    const pw = 860, ph = pw * src.height / src.width;
+    // Print is sized to exactly fill the middle 4:5 band (1080x1350), which is the
+    // part a feed post shows. Story and Reel show the whole 9:16 frame around it.
+    const pw = 848, ph = pw * src.height / src.width;
     x.shadowColor = "rgba(44, 20, 48, 0.45)";
     x.shadowBlur = 60; x.shadowOffsetY = 20;
     x.drawImage(src, (W - pw) / 2, (H - ph) / 2, pw, ph);
@@ -446,7 +448,7 @@
       ctx.fillText(row.text, W / 2, y);
     });
 
-    return toStory(canvas);
+    return { preview: canvas.toDataURL("image/jpeg", 0.92), story: toStory(canvas) };
   }
 
   async function upload(image) {
