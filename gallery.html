@@ -138,7 +138,9 @@
 
   $("#title").textContent = (event.replace(/-\d{8}-[a-z0-9]{3,8}$/, "").replace(/-[a-z0-9]{3,8}$/, "") || "Photo gallery").replace(/-/g, " ");
 
-  if (ID_PATTERN.test(single)) {
+  const soloView = ID_PATTERN.test(single);
+  if (soloView) {
+    $("#grid").hidden = true;
     $("#solo").hidden = false;
     $("#soloImg").src = urlFor(single);
     $("#sub").textContent = "Here's your photo.";
@@ -192,7 +194,7 @@
         b.addEventListener("click", () => open(id));
         grid.prepend(b);
       });
-      $("#toolbar").hidden = shown.size === 0;
+      $("#toolbar").hidden = soloView || shown.size === 0;
       if (!single) {
         $("#sub").textContent = shown.size
           ? `${shown.size} photo${shown.size === 1 ? "" : "s"} so far`
